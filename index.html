@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Aviator Smart Predictor</title>
+  <style>
+    body {
+      background: #0b0b0b;
+      color: white;
+      font-family: Arial;
+      text-align: center;
+    }
+    input, button {
+      padding: 10px;
+      margin: 8px;
+      font-size: 16px;
+    }
+    .blue { color: #00bfff; }
+    .purple { color: #a020f0; }
+    .pink { color: #ff4da6; }
+  </style>
+</head>
+
+<body>
+
+<h2>✈️ Aviator Smart Predictor (Advanced)</h2>
+
+<input type="time" id="time">
+<input type="number" id="spike" placeholder="Enter current spike" step="0.01">
+
+<br>
+<button onclick="addData()">Add Spike</button>
+<button onclick="predict()">Predict</button>
+
+<h3>📊 History (Last 20)</h3>
+<div id="history"></div>
+
+<div id="result"></div>
+
+<script>
+
+let history = [];
+
+// ---------- HELPERS ----------
+function getColor(x){
+  if(x < 2) return "blue";
+  if(x < 10) return "purple";
+  return "pink";
+}
+
+function has4(x){
+  return x.toString().includes(".4");
+}
+
+function has36(x){
+  return x.toString().includes("3") || x.toString().includes("6");
+}
+
+function isPreUnit(x){
+  return x >= 1 && x <= 1.7;
+}
+
+function addMinutes(time, mins){
+  let [h,m] = time.split(":").map(Number);
+  let d = new Date();
+  d.setHours(h);
+  d.setMinutes(m + mins);
+  return d.toTimeString().slice(0,5);
+}
+
+// ---------- ADD DATA ----------
+function addData(){
+  let spike = parseFloat(document.getElementById("spike").value);
+
+  if(!spike) return alert("Enter spike");
+
+  history.push(spike);
+
+  if(history.length > 20) history.shift();
+
+  displayHistory();
+}
+
+function displayHistory(){
+  let html = history.map(x=>{
+    return `<span class="${getColor(x)}">${x}x</span>`;
+  }).join(" , ");
+
+  document.getElementById("history").innerHTML = html;
+}
+
+// ---------- PATTERN DETECTION ----------
+function detectRecovery(){
+  let last = history.slice(-3);
+
+  return last.some(x => x >= 4 && x <= 4.99);
+}
+
+function detectPreUnitStack(){
+  let last = history.slice(-5);
+  return last.filter(x => isPreUnit(x)).length >= 3;
+}
+
+function detectOpenHour(){
+  let last = history.slice(-10);
+  let pinks = last.filter(x => x >= 10).length;
+  return pinks >= 2;
+}
+
+// ---------- CONFIDENCE ----------
+function calculateConfidence(next){
+  let score = 50;
+
+  if(detectPreUnitStack()) score += 20;
+  if(detectRecovery()) score += 15;
+  if(detectOpenHour()) score += 15;
+
+  if(next >= 10) score += 10;
+
+  return Math.min(score, 95);
+}
+
+// ---------- PREDICTION ----------
+function predict(){
+
+  let time = document.getElementById("time").value;
+
+  if(!time || history.length === 0){
+    alert("Add data and time");
+    return;
+  }
+
+  let last = history[history.length - 1];
+  let next;
+
+  // SMART RULE ENGINE
+
+  if(detectPreUnitStack() && has36(last)){
+    next = (10 + Math.random()*50);
+  }
+  else if(has4(last)){
+    next = (10 + Math.random()*30);
+  }
+  else if(detectRecovery()){
+    next = (8 + Math.random()*20);
+  }
+  else if(last >= 10){
+    next = (1 + Math.random()*2);
+  }
+  else if(last >= 2){
+    next = (1.5 + Math.random()*7);
+  }
+  else{
+    next = (2 + Math.random()*6);
+  }
+
+  next = next.toFixed(2);
+
+  let color = getColor(next);
+  let confidence = calculateConfidence(next);
+
+  // TIME WINDOWS
+  let t2 = addMinutes(time, 2);
+  let t5 = addMinutes(time, 5);
+  let t9 = addMinutes(time, 9);
+
+  // STATUS
+  let status = `
+    Recovery: ${detectRecovery() ? "YES" : "NO"}<br>
+    Open Hour: ${detectOpenHour() ? "YES" : "NO"}<br>
+    Pre-unit Stack: ${detectPreUnitStack() ? "STRONG" : "WEAK"}
+  `;
+
+  document.getElementById("result").innerHTML = `
+    <h3>📡 Prediction Result</h3>
+
+    <p class="${color}">Next Spike: ${next}x</p>
+    <p>Confidence: ${confidence}%</p>
+
+    <h4>⏱ Time Windows</h4>
+    <p>+2 min → ${t2}</p>
+    <p>+5 min → ${t5}</p>
+    <p>+9 min → ${t9}</p>
+
+    <h4>🧠 System Status</h4>
+    <p>${status}</p>
+  `;
+}
+
+</script>
+
+</body>
+</html>
