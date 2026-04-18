@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Aviator Smart Predictor</title>
+  <title>JetX Live Pattern Simulator</title>
+
   <style>
     body {
       background: #0b0b0b;
@@ -9,182 +10,166 @@
       font-family: Arial;
       text-align: center;
     }
+
     input, button {
       padding: 10px;
-      margin: 8px;
-      font-size: 16px;
+      margin: 6px;
+      font-size: 14px;
     }
-    .blue { color: #00bfff; }
-    .purple { color: #a020f0; }
-    .pink { color: #ff4da6; }
+
+    .range {
+      color: #00ff88;
+      font-weight: bold;
+    }
+
+    .low { color: #00bfff; }
+    .med { color: #a020f0; }
+    .high { color: #ff4da6; }
+
+    #clock {
+      font-size: 18px;
+      margin: 10px;
+      color: #00ff88;
+    }
+
+    .pulse {
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.4; }
+      100% { opacity: 1; }
+    }
   </style>
 </head>
 
 <body>
 
-<h2>✈️ Aviator Smart Predictor (Advanced)</h2>
+<h2>🚀 JetX Live Pattern Simulator</h2>
 
-<input type="time" id="time">
-<input type="number" id="spike" placeholder="Enter current spike" step="0.01">
+<div id="clock">--:--</div>
+
+<p>Enter signal → live volatility windows (HH:MM only)</p>
+
+<input type="text" id="time" placeholder="HH:MM (e.g. 12:01)">
+<input type="number" id="multiplier" placeholder="Multiplier (e.g. 2.3)" step="0.01">
 
 <br>
-<button onclick="addData()">Add Spike</button>
-<button onclick="predict()">Predict</button>
 
-<h3>📊 History (Last 20)</h3>
-<div id="history"></div>
+<label>
+  <input type="checkbox" id="auto"> Auto Refresh (3s)
+</label>
+
+<br>
+
+<button onclick="generate()">Generate Now</button>
 
 <div id="result"></div>
 
 <script>
 
-let history = [];
+// ---------- LIVE CLOCK (NO SECONDS) ----------
+function updateClock(){
+  let now = new Date();
+  let h = String(now.getHours()).padStart(2,'0');
+  let m = String(now.getMinutes()).padStart(2,'0');
 
-// ---------- HELPERS ----------
-function getColor(x){
-  if(x < 2) return "blue";
-  if(x < 10) return "purple";
-  return "pink";
+  document.getElementById("clock").innerHTML =
+    `🕒 Live Time: ${h}:${m}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ---------- PARSE ----------
+function parseTime(t){
+  let [h,m] = t.split(":").map(Number);
+  return {h,m};
 }
 
-function has4(x){
-  return x.toString().includes(".4");
+// ---------- FORMAT ----------
+function format(h,m){
+  if(m >= 60){ h += Math.floor(m/60); m %= 60; }
+  if(h >= 24){ h %= 24; }
+
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 }
 
-function has36(x){
-  return x.toString().includes("3") || x.toString().includes("6");
+// ---------- VOL ----------
+function getVol(v){
+  if(v < 2) return "low";
+  if(v < 5) return "med";
+  return "high";
 }
 
-function isPreUnit(x){
-  return x >= 1 && x <= 1.7;
+// ---------- RANGE ----------
+function makeRange(vol){
+
+  if(vol === "low"){
+    return (1 + Math.random()*1.8).toFixed(2) + "x – " +
+           (2 + Math.random()*2.5).toFixed(2) + "x";
+  }
+
+  if(vol === "med"){
+    return (2 + Math.random()*3).toFixed(2) + "x – " +
+           (6 + Math.random()*6).toFixed(2) + "x";
+  }
+
+  return (4 + Math.random()*8).toFixed(2) + "x – " +
+         (15 + Math.random()*35).toFixed(2) + "x";
 }
 
-function addMinutes(time, mins){
-  let [h,m] = time.split(":").map(Number);
-  let d = new Date();
-  d.setHours(h);
-  d.setMinutes(m + mins);
-  return d.toTimeString().slice(0,5);
+// ---------- COLOR ----------
+function color(vol){
+  if(vol === "low") return "low";
+  if(vol === "med") return "med";
+  return "high";
 }
 
-// ---------- ADD DATA ----------
-function addData(){
-  let spike = parseFloat(document.getElementById("spike").value);
+// ---------- MAIN ----------
+function generate(){
 
-  if(!spike) return alert("Enter spike");
+  let t = document.getElementById("time").value;
+  let v = parseFloat(document.getElementById("multiplier").value);
 
-  history.push(spike);
-
-  if(history.length > 20) history.shift();
-
-  displayHistory();
-}
-
-function displayHistory(){
-  let html = history.map(x=>{
-    return `<span class="${getColor(x)}">${x}x</span>`;
-  }).join(" , ");
-
-  document.getElementById("history").innerHTML = html;
-}
-
-// ---------- PATTERN DETECTION ----------
-function detectRecovery(){
-  let last = history.slice(-3);
-
-  return last.some(x => x >= 4 && x <= 4.99);
-}
-
-function detectPreUnitStack(){
-  let last = history.slice(-5);
-  return last.filter(x => isPreUnit(x)).length >= 3;
-}
-
-function detectOpenHour(){
-  let last = history.slice(-10);
-  let pinks = last.filter(x => x >= 10).length;
-  return pinks >= 2;
-}
-
-// ---------- CONFIDENCE ----------
-function calculateConfidence(next){
-  let score = 50;
-
-  if(detectPreUnitStack()) score += 20;
-  if(detectRecovery()) score += 15;
-  if(detectOpenHour()) score += 15;
-
-  if(next >= 10) score += 10;
-
-  return Math.min(score, 95);
-}
-
-// ---------- PREDICTION ----------
-function predict(){
-
-  let time = document.getElementById("time").value;
-
-  if(!time || history.length === 0){
-    alert("Add data and time");
+  if(!t || isNaN(v)){
+    alert("Enter valid time + multiplier");
     return;
   }
 
-  let last = history[history.length - 1];
-  let next;
+  let time = parseTime(t);
+  let vol = getVol(v);
 
-  // SMART RULE ENGINE
+  let output = [];
 
-  if(detectPreUnitStack() && has36(last)){
-    next = (10 + Math.random()*50);
-  }
-  else if(has4(last)){
-    next = (10 + Math.random()*30);
-  }
-  else if(detectRecovery()){
-    next = (8 + Math.random()*20);
-  }
-  else if(last >= 10){
-    next = (1 + Math.random()*2);
-  }
-  else if(last >= 2){
-    next = (1.5 + Math.random()*7);
-  }
-  else{
-    next = (2 + Math.random()*6);
+  for(let i=1;i<=5;i++){
+
+    let h = time.h;
+    let m = time.m + (i * 2);
+
+    let start = format(h,m);
+    let end = format(h, m+2);
+
+    output.push(`
+      <p class="${color(vol)} pulse">
+        Window ${i}: <b class="range">${makeRange(vol)}</b><br>
+        Time: ${start} – ${end}
+      </p>
+    `);
   }
 
-  next = next.toFixed(2);
-
-  let color = getColor(next);
-  let confidence = calculateConfidence(next);
-
-  // TIME WINDOWS
-  let t2 = addMinutes(time, 2);
-  let t5 = addMinutes(time, 5);
-  let t9 = addMinutes(time, 9);
-
-  // STATUS
-  let status = `
-    Recovery: ${detectRecovery() ? "YES" : "NO"}<br>
-    Open Hour: ${detectOpenHour() ? "YES" : "NO"}<br>
-    Pre-unit Stack: ${detectPreUnitStack() ? "STRONG" : "WEAK"}
-  `;
-
-  document.getElementById("result").innerHTML = `
-    <h3>📡 Prediction Result</h3>
-
-    <p class="${color}">Next Spike: ${next}x</p>
-    <p>Confidence: ${confidence}%</p>
-
-    <h4>⏱ Time Windows</h4>
-    <p>+2 min → ${t2}</p>
-    <p>+5 min → ${t5}</p>
-    <p>+9 min → ${t9}</p>
-
-    <h4>🧠 System Status</h4>
-    <p>${status}</p>
-  `;
+  document.getElementById("result").innerHTML =
+    `<h3>📡 Live JetX Windows</h3>
+     <p>Signal: <b>${vol.toUpperCase()}</b></p>
+     ${output.join("")}`;
 }
+
+// ---------- AUTO REFRESH ----------
+setInterval(() => {
+  if(document.getElementById("auto").checked){
+    generate();
+  }
+}, 3000);
 
 </script>
 
